@@ -57,6 +57,5 @@ def main():
     for thread in threads:
         thread.join()
 
-
 if __name__ == '__main__':
     main()
