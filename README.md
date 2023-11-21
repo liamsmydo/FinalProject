@@ -1,3 +1,3 @@
 # FinalProject
 
-just a spcae where the final project can be simply managed.
+just a space where the final project can be simply managed.
