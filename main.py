@@ -4,6 +4,9 @@ import re
 
 
 print_lock = threading.Lock()
+open_ports = []
+closed_ports = []
+all_ports = []
 
 def valid_ip(arg):
     ip_pattern = re.compile(
@@ -49,13 +52,13 @@ def scan_port(target, port):
 
         result = sock.connect((target, port))
         with print_lock:
-            print (f"Port {port} is open\n")
+          open_ports.append(port)
     except ConnectionRefusedError:
         with print_lock:
-            print(f"Port {port} is closed\n")
+           closed_ports.append(port)
     except socket.timeout:
         with print_lock:
-            print(f"Port {port} timed out\n")
+           closed_ports.append(port)
     except Exception as e:
         with print_lock:
             print(f"An error occurred while scanning port {port}: {e}\n")
@@ -109,6 +112,17 @@ def main():
 
     for thread in threads:
         thread.join()
+    
+    all_ports.extend(open_ports)
+    all_ports.extend(closed_ports)
+    all_ports.sort() 
 
+    for port in all_ports:
+            if port in open_ports:
+                print(f"Port {port} is open")
+            else:
+                print(f"Port {port} is closed")   
+          
+            
 if __name__ == '__main__':
     main()
