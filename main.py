@@ -4,8 +4,8 @@ import re
 
 
 print_lock = threading.Lock()
-open_ports = []
-closed_ports = []
+open_ports = set()
+closed_ports = set()
 all_ports = []
 
 def valid_ip(arg):
@@ -46,19 +46,17 @@ def parse_ports(arg):
 
 def scan_port(target, port):
     try:
-
         sock =socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
-
         result = sock.connect((target, port))
         with print_lock:
-          open_ports.append(port)
+          open_ports.add(port)
     except ConnectionRefusedError:
         with print_lock:
-           closed_ports.append(port)
+           closed_ports.add(port)
     except socket.timeout:
         with print_lock:
-           closed_ports.append(port)
+           closed_ports.add(port)
     except Exception as e:
         with print_lock:
             print(f"An error occurred while scanning port {port}: {e}\n")
@@ -102,6 +100,9 @@ def custom_scan(target):
     thread_scan(target, ports)
     return port_range
 
+def thread_scan_wrapper(target, port):
+    thread_scan(target, port)
+
 def main():
     target = ip_input()
      # Scan mode options
@@ -131,17 +132,16 @@ def main():
                 ports.extend(range(start, end + 1))
             else:
                 ports.append(int(part))
-        print(f"Scanning ports {ports} on {target}... \n")
    
     print (f"scanning ports {ports} on target {target}... \n")
 
     num_threads = 4
     threads =[]
 
-    for i in range(num_threads): #Scans ports with mutiple threads
+    for i in range(num_threads):
         start = i * len(ports) // num_threads
-        end = (i+1) * len(ports) // num_threads
-        thread = threading.Thread(target=thread_scan, args=(target, ports[start:end]))
+        end = (i + 1) * len(ports) // num_threads
+        thread = threading.Thread(target=thread_scan_wrapper, args=(target, ports[start:end]))
         threads.append(thread)
         thread.start()
 
