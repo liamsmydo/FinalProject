@@ -2,16 +2,42 @@ import socket
 import threading
 import re
 import logging
+from colorama import Fore, Style, init
+
+init(autoreset=True)  # Initialize colorama
+
+COMMON_PORTS_SERVICES = {
+    21: 'FTP',
+    22: 'SSH',
+    23: 'Telnet',
+    25: 'SMTP',
+    53: 'DNS',
+    80: 'HTTP',
+    110: 'POP3',
+    443: 'HTTPS',
+    3389: 'RDP'
+}
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Change this to logging.DEBUG for more detailed logs
     format="%(asctime)s [%(levelname)s]: %(message)s",
     handlers=[
         logging.FileHandler("scan_log.txt"),
-        logging.StreamHandler()
     ]
 )
+
+def save_results_to_file(targets):
+    filename = input("Enter the filename to save results (include extension, e.g., 'results.txt'): ")
+    with open(filename, 'w') as file:
+        for target in targets:
+            file.write(f"Results for {target}:\n")
+            for port in ip_results[target]['all_ports']:
+                status = 'open' if port in ip_results[target]['open_ports'] else 'closed'
+                service_name = COMMON_PORTS_SERVICES.get(port, "Unknown Service")
+                file.write(f"Port {port} ({service_name}) is {status}.\n")
+            file.write("\n")
+
 
 ip_results = {}  # Dictionary to store results for each target IP
 ip_results_lock = threading.Lock()  # Lock for updating ip_results
@@ -31,6 +57,33 @@ def valid_ip(arg):
         return True
     else:
         return False
+    
+def valid_ip_range(ip_range):
+    start, end = ip_range.split('-')
+    start_parts = list(map(int, start.split('.')))
+    end_parts = list(map(int, end.split('.')))
+
+    for i in range(4):
+        if not (0 <= start_parts[i] <= 255) or not (0 <= end_parts[i] <= 255):
+            return False
+
+    return True 
+
+def generate_ip_range(ip_range):
+    start, end = ip_range.split('-')
+    start_parts = list(map(int, start.split('.')))
+    end_parts = list(map(int, end.split('.')))
+
+    ips = []
+
+    for i in range(start_parts[0], end_parts[0] + 1):
+        for j in range(start_parts[1], end_parts[1] + 1):
+            for k in range(start_parts[2], end_parts[2] + 1):
+                for l in range(start_parts[3], end_parts[3] + 1):
+                    ips.append(f"{i}.{j}.{k}.{l}")
+    return ips                   
+
+
 
 def valid_port(arg):
     try:
@@ -59,17 +112,28 @@ def scan_port(target, port):
         result = sock.connect((target, port))
         with ip_results_lock:
             ip_results[target]['open_ports'].add(port)
+        logging.debug(f"Port {port} is open on {target}")
     except ConnectionRefusedError:
         with ip_results_lock:
             ip_results[target]['closed_ports'].add(port)
+        logging.debug(f"Port {port} is closed on {target}")
     except socket.timeout:
         with ip_results_lock:
             ip_results[target]['closed_ports'].add(port)
+        logging.debug(f"Port {port} is closed on {target}")
     except Exception as e:
         error_message = f"An error occurred while scanning port {port} on {target}: {e}"
         logging.error(error_message)
     finally:
         sock.close()
+        
+        
+def display_port_status(target, port, status):
+    service_name = COMMON_PORTS_SERVICES.get(port, "Unknown Service")
+    if status == 'open':
+        print(f"Port {port} ({service_name}) is {Fore.GREEN}open{Style.RESET_ALL} on {target}")
+    elif status == 'closed':
+        print(f"Port {port} ({service_name}) is {Fore.RED}closed{Style.RESET_ALL} on {target}")
 
 def thread_scan(target, ports, scan_start_lock):
     threads = []
@@ -88,13 +152,19 @@ def thread_scan(target, ports, scan_start_lock):
 
 def ip_input():
     while True:
-        targets = input("Enter the target IPs or hostnames separated by commas: ")
-        target_list = [t.strip() for t in targets.split(',')]
-        if all(valid_ip(target) for target in target_list):
-            print("You have entered valid IP addresses")
-            return target_list
+        ip_input_str = input("Enter the target IPs or range (ex. '192.168.1.1,192.168.1.2' or '192.168.1.1-192.168.1.10'): ")
+        ip_list = [ip.strip() for ip in ip_input_str.split(',')]
+
+        if all(valid_ip(ip) or valid_ip_range(ip) for ip in ip_list):
+            if '-' in ip_input_str:
+                ips = generate_ip_range(ip_input_str)
+            else:
+                ips = ip_list
+
+            print(f"You have entered valid IP addresses: {', '.join(ips)}")
+            return ips
         else:
-            print("Please enter valid IP addresses")
+            print("Please enter valid IP addresses or range")
 
 def port_input():
     while True:
@@ -196,10 +266,10 @@ def main():
             printed_ports = set()  # To track printed ports
             for port in filtered_ports:
                 if port in ip_results[target]['open_ports'] and port not in ip_results[target]['closed_ports'] and port not in printed_ports:
-                    print(f"Port {port} is open on {target}")
+                    display_port_status(target, port, 'open')
                     printed_ports.add(port)
                 elif port in ip_results[target]['closed_ports'] and port not in ip_results[target]['open_ports'] and port not in printed_ports:
-                    print(f"Port {port} is closed on {target}")
+                    display_port_status(target, port, 'closed')
                     printed_ports.add(port)
 
 if __name__ == '__main__':
