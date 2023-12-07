@@ -1,7 +1,8 @@
 import socket
 import threading
 import re
-
+import argparse
+import multiprocessing
 
 print_lock = threading.Lock()
 
@@ -85,10 +86,18 @@ def port_input():
             print ("please enter a valid port range")
 
 def main():
-    target = ip_input()
-    port_range = port_input()
+    parser= argparse.ArgumentParser(description='Mega Port Scanner')
+    parser.add_argument('target', help = 'Target IP or Hostname')
+    parser.add_argument('port', help = 'Port Range (eg., "80-100" or "23,80,445")')
+    args = parser.parse_args()
 
-    ports = []                          #Specifies the port list to scan
+    
+    
+    
+    target = args.target
+    port_range = args.port_range
+
+    ports = parse_ports(port_range)                          #Specifies the port list to scan
     for part in port_range.split(","):
         if '-' in part:
             start, end = map(int, part.split('-'))
@@ -98,6 +107,13 @@ def main():
     print(f"Scanning ports {ports} on {target}... \n")
 
     num_threads = 4
+    num_processes = 2
+
+    pool = multiprocessing.Pool(processes= num_processes)
+
+    chunk_size = len(ports) // num_processes
+    args_list = [(target, ports[i:i+chunk_size]) for i in range(0, len(ports), chunk_size)] 
+
     threads =[]
 
     for i in range(num_threads): #Scans ports with mutiple threads
