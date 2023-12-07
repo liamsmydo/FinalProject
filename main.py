@@ -1,9 +1,20 @@
 import socket
 import threading
 import re
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s]: %(message)s",
+    handlers=[
+        logging.FileHandler("scan_log.txt"),
+        logging.StreamHandler()
+    ]
+)
 
 ip_results = {}  # Dictionary to store results for each target IP
-print_lock = threading.Lock()
+ip_results_lock = threading.Lock()  # Lock for updating ip_results
 
 def valid_ip(arg):
     ip_pattern = re.compile(
@@ -46,23 +57,34 @@ def scan_port(target, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
         result = sock.connect((target, port))
-        with print_lock:
-          ip_results[target]['open_ports'].add(port)
+        with ip_results_lock:
+            ip_results[target]['open_ports'].add(port)
     except ConnectionRefusedError:
-        with print_lock:
-           ip_results[target]['closed_ports'].add(port)
+        with ip_results_lock:
+            ip_results[target]['closed_ports'].add(port)
     except socket.timeout:
-        with print_lock:
-           ip_results[target]['closed_ports'].add(port)
+        with ip_results_lock:
+            ip_results[target]['closed_ports'].add(port)
     except Exception as e:
-        with print_lock:
-            print(f"An error occurred while scanning port {port} on {target}: {e}\n")
+        error_message = f"An error occurred while scanning port {port} on {target}: {e}"
+        logging.error(error_message)
     finally:
         sock.close()
 
-def thread_scan(target, ports):
-    for port in ports:
+def thread_scan(target, ports, scan_start_lock):
+    threads = []
+
+    def scan_port_wrapper(port):
         scan_port(target, port)
+
+    with scan_start_lock:
+        for port in ports:
+            thread = threading.Thread(target=scan_port_wrapper, args=(port,))
+            threads.append(thread)
+            thread.start()
+
+    for thread in threads:
+        thread.join()
 
 def ip_input():
     while True:
@@ -83,98 +105,102 @@ def port_input():
         else:
             print("Please enter a valid port range")
 
-def quick_scan(target, ports):
-    thread_scan(target, ports)
-    for thread in threading.enumerate():  # Wait for all threads to finish
-        if thread is not threading.current_thread():
-            thread.join()
+def quick_scan(target, ports, scan_start_lock):
+    thread_scan(target, ports, scan_start_lock)
 
-def thorough_scan(target, port_range):
+def thorough_scan(target, port_range, scan_start_lock):
     ports = parse_ports(port_range)
-    thread_scan(target, ports)
+    thread_scan(target, ports, scan_start_lock)
 
-def custom_scan(target):
+def custom_scan(target, scan_start_lock):
     port_range = port_input()
     ports = parse_ports(port_range)
-    thread_scan(target, ports)
+    thread_scan(target, ports, scan_start_lock)
     return port_range
 
-def thread_scan_wrapper(target, port):
-    thread_scan(target, port)
+def thread_scan_wrapper(target, port, scan_start_lock):
+    thread_scan(target, port, scan_start_lock)
 
 def main():
     global ip_results
+    processed_ips = set()  # To track processed IPs
     targets = ip_input()
 
     for target in targets:
-        ip_results[target] = {'open_ports': set(), 'closed_ports': set(), 'all_ports': set()}
+        if target not in processed_ips:
+            processed_ips.add(target)
+            ip_results[target] = {'open_ports': set(), 'closed_ports': set(), 'all_ports': set()}
 
-        # Scan mode options
-        print(f"\nScanning target: {target}")
-        print("Scan Modes:")
-        print("  (Q)uick Scan (Common Ports)")
-        print("  (T)horough Scan (Entire Port Range)")
-        print("  (C)ustom Scan (Specify Port Range)")
-        scan_mode = input("Choose a scan mode: ").lower()
+            # Scan mode options
+            scan_mode = input(f"\nChoose a scan mode for target {target}: "
+                              "\n(Q)uick Scan (Common Ports)"
+                              "\n(T)horough Scan (Entire Port Range)"
+                              "\n(C)ustom Scan (Specify Port Range) ").lower()
 
-        if scan_mode == 'q':
-            common_ports = [21, 22, 23, 25, 53, 80, 110, 443, 3389]
-            quick_scan(target, common_ports)
-            ports = common_ports
-        elif scan_mode == 't':
-            port_range = "1-65535"  # Entire port range
-            thorough_scan(target, port_range)
-        elif scan_mode == 'c':
-            port_range = custom_scan(target)
-        else:
-            print("Invalid scan mode. Exiting.")
-            return
+            scan_start_lock = threading.Lock()
 
-        if scan_mode != 'q':
-            ports = []  # Specifies the port list to scan
-            for part in port_range.split(","):
-                if '-' in part:
-                    start, end = map(int, part.split('-'))
-                    ports.extend(range(start, end + 1))
-                else:
-                    ports.append(int(part))
-
-        print(f"Scanning ports {ports} on target {target}... \n")
-
-        num_threads = 4
-        threads = []
-
-        for i in range(num_threads):
-            start = i * len(ports) // num_threads
-            end = (i + 1) * len(ports) // num_threads
-            thread = threading.Thread(target=thread_scan_wrapper, args=(target, ports[start:end]))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
-        ip_results[target]['all_ports'].update(ip_results[target]['open_ports'])
-        ip_results[target]['all_ports'].update(ip_results[target]['closed_ports'])
-
-        # user chooses filter
-        filter_option = input("Filter options: (O)pen Ports, (C)losed Ports, (A)ll Ports: ").lower()
-
-        if filter_option == 'o':
-            filtered_ports = sorted(ip_results[target]['open_ports'])
-        elif filter_option == 'c':
-            filtered_ports = sorted(ip_results[target]['closed_ports'])
-        elif filter_option == 'a':
-            filtered_ports = sorted(ip_results[target]['all_ports'])
-        else:
-            print("Invalid filter option. Displaying all ports.")
-            filtered_ports = sorted(ip_results[target]['all_ports'])
-
-        for port in filtered_ports:
-            if port in ip_results[target]['open_ports']:
-                print(f"Port {port} is open on {target}")
+            if scan_mode == 'q':
+                common_ports = [21, 22, 23, 25, 53, 80, 110, 443, 3389]
+                quick_scan(target, common_ports, scan_start_lock)
+            elif scan_mode == 't':
+                port_range = "1-65535"  # Entire port range
+                thorough_scan(target, port_range, scan_start_lock)
+            elif scan_mode == 'c':
+                port_range = custom_scan(target, scan_start_lock)
             else:
-                print(f"Port {port} is closed on {target}")
+                print("Invalid scan mode. Exiting.")
+                return
+
+            if scan_mode != 'q':
+                ports = []  # Specifies the port list to scan
+                for part in port_range.split(","):
+                    if '-' in part:
+                        start, end = map(int, part.split('-'))
+                        ports.extend(range(start, end + 1))
+                    else:
+                        ports.append(int(part))
+
+                with scan_start_lock:
+                    print(f"Scanning ports {ports} on target {target}... \n")
+
+                num_threads = 4
+                threads = []
+
+                for i in range(num_threads):
+                    start = i * len(ports) // num_threads
+                    end = (i + 1) * len(ports) // num_threads
+                    thread = threading.Thread(target=thread_scan_wrapper,
+                                              args=(target, ports[start:end], scan_start_lock))
+                    threads.append(thread)
+                    thread.start()
+
+                for thread in threads:
+                    thread.join()
+
+            ip_results[target]['all_ports'].update(ip_results[target]['open_ports'])
+            ip_results[target]['all_ports'].update(ip_results[target]['closed_ports'])
+
+            # user chooses filter
+            filter_option = input("Filter options: (O)pen Ports, (C)losed Ports, (A)ll Ports: ").lower()
+
+            if filter_option == 'o':
+                filtered_ports = sorted(ip_results[target]['open_ports'])
+            elif filter_option == 'c':
+                filtered_ports = sorted(ip_results[target]['closed_ports'])
+            elif filter_option == 'a':
+                filtered_ports = sorted(ip_results[target]['all_ports'])
+            else:
+                print("Invalid filter option. Displaying all ports.")
+                filtered_ports = sorted(ip_results[target]['all_ports'])
+
+            printed_ports = set()  # To track printed ports
+            for port in filtered_ports:
+                if port in ip_results[target]['open_ports'] and port not in ip_results[target]['closed_ports'] and port not in printed_ports:
+                    print(f"Port {port} is open on {target}")
+                    printed_ports.add(port)
+                elif port in ip_results[target]['closed_ports'] and port not in ip_results[target]['open_ports'] and port not in printed_ports:
+                    print(f"Port {port} is closed on {target}")
+                    printed_ports.add(port)
 
 if __name__ == '__main__':
     main()
