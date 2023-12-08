@@ -10828,3 +10828,12 @@
 2023-12-08 14:03:15,431 [DEBUG]: Port 3389 is closed on 127.0.0.1
 2023-12-08 14:03:15,431 [DEBUG]: Port 443 is closed on 127.0.0.1
 2023-12-08 14:03:15,431 [DEBUG]: Port 53 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 21 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 110 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 23 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 22 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 25 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 53 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 80 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 443 is closed on 127.0.0.1
+2023-12-08 16:42:19,962 [DEBUG]: Port 3389 is closed on 127.0.0.1

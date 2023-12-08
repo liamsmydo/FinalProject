@@ -6,7 +6,7 @@ from colorama import Fore, Style, init
 import argparse
 
 init(autoreset=True)  # Initialize colorama
-
+# service detection/security scanning
 COMMON_PORTS_SERVICES = {
     21: 'FTP',
     22: 'SSH',
@@ -19,7 +19,7 @@ COMMON_PORTS_SERVICES = {
     3389: 'RDP'
 }
 
-# Configure logging
+# Logging function
 logging.basicConfig(
     level=logging.DEBUG,  # Change this to logging.DEBUG for more detailed logs
     format="%(asctime)s [%(levelname)s]: %(message)s",
@@ -27,7 +27,7 @@ logging.basicConfig(
         logging.FileHandler("scan_log.txt"),
     ]
 )
-
+# save results to a file
 def save_results_to_file(filename,targets):
     with open(filename, 'w') as file:
         for target in targets:
@@ -41,7 +41,7 @@ def save_results_to_file(filename,targets):
 
 ip_results = {}  # Dictionary to store results for each target IP
 ip_results_lock = threading.Lock()  # Lock for updating ip_results
-
+# ip validation
 def valid_ip(arg):
     ip_pattern = re.compile(
         r'^(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.'
@@ -57,7 +57,7 @@ def valid_ip(arg):
         return True
     else:
         return False
-    
+    # ip range validation 
 def valid_ip_range(ip_range):
     start, end = ip_range.split('-')
     start_parts = list(map(int, start.split('.')))
@@ -84,7 +84,7 @@ def generate_ip_range(ip_range):
     return ips                   
 
 
-
+# port validation
 def valid_port(arg):
     try:
         ports = parse_ports(arg)
@@ -94,7 +94,7 @@ def valid_port(arg):
         return True
     except ValueError:
         return False
-
+# port parsing function
 def parse_ports(arg):
     ports = []
     for part in arg.split(","):
@@ -104,7 +104,7 @@ def parse_ports(arg):
         else:
             ports.append(int(part))
     return ports
-
+# scanning function
 def scan_port(target, port):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -127,14 +127,14 @@ def scan_port(target, port):
     finally:
         sock.close()
         
-        
+# display to user       
 def display_port_status(target, port, status):
     service_name = COMMON_PORTS_SERVICES.get(port, "Unknown Service")
     if status == 'open':
         print(f"Port {port} ({service_name}) is {Fore.GREEN}open{Style.RESET_ALL} on {target}")
     elif status == 'closed':
         print(f"Port {port} ({service_name}) is {Fore.RED}closed{Style.RESET_ALL} on {target}")
-
+# multi Threading
 def thread_scan(target, ports, scan_start_lock):
     threads = []
 
@@ -149,7 +149,7 @@ def thread_scan(target, ports, scan_start_lock):
 
     for thread in threads:
         thread.join()
-
+# scan multiple ips, scan ip range
 def ip_input(ip_input_str):
     while True:
         ip_list = [ip.strip() for ip in ip_input_str.split(',')]
@@ -164,7 +164,7 @@ def ip_input(ip_input_str):
             return ips
         else:
             raise argparse.ArgumentTypeError("Please enter valid IP addresses or range")
-
+# define ports to scan for custom scan
 def port_input():
     while True:
         port_range = input("Enter the port range (ex. '80-100' or '23,80,445') ")
@@ -173,28 +173,28 @@ def port_input():
             return port_range
         else:
             print("Please enter a valid port range")
-
+# quick scan
 def quick_scan(target, ports, scan_start_lock):
     thread_scan(target, ports, scan_start_lock)
-
+# intense scan
 def thorough_scan(target, port_range, scan_start_lock):
     ports = parse_ports(port_range)
     thread_scan(target, ports, scan_start_lock)
-
+# custom scan list
 def custom_scan(target, scan_start_lock):
     port_range = port_input()
     ports = parse_ports(port_range)
     thread_scan(target, ports, scan_start_lock)
     return port_range
-
+# mulit threading
 def thread_scan_wrapper(target, port, scan_start_lock):
     thread_scan(target, port, scan_start_lock)
 
-def main():
+def main(): # user friendly cli
     parser = argparse.ArgumentParser(description='TrashMap Scanner Made By Liam Smydo and Spencer Lightfoot')
     parser.add_argument('-t', '--target', type=ip_input, help="Target IPs or ranges (ex. '192.168.1.1,192.168.1.2' or '192.168.1.1-192.168.1.10')", default='127.0.0.1')
     parser.add_argument('-s', '--scan-type', help='Scan Type q = quick (Common Ports), t = thorough (All ports) c = custom)', default='q')
-    parser.add_argument('-o', '--output', help='"Enter the filename to save results (include extension, e.g., "results.txt"): "', default='results.txt')
+    parser.add_argument('-o', '--output', help='"Enter the filename to save results (include extension, e.g., "results.txt"): "', default='results.txt') # output customization
     args = parser.parse_args()
     ip_input_str = args.target
     scan_mode = args.scan_type
@@ -207,11 +207,10 @@ def main():
             processed_ips.add(target)
             ip_results[target] = {'open_ports': set(), 'closed_ports': set(), 'all_ports': set()}
 
-            # Scan mode options
             
 
             scan_start_lock = threading.Lock()
-
+            # scan modes
             if scan_mode == 'q':
                 common_ports = [21, 22, 23, 25, 53, 80, 110, 443, 3389]
                 quick_scan(target, common_ports, scan_start_lock)
@@ -253,7 +252,7 @@ def main():
             ip_results[target]['all_ports'].update(ip_results[target]['open_ports'])
             ip_results[target]['all_ports'].update(ip_results[target]['closed_ports'])
 
-            # user chooses filter
+            # port filtering
             filter_option = input("Filter options: (O)pen Ports, (C)losed Ports, (A)ll Ports: ").lower()
 
             if filter_option == 'o':
