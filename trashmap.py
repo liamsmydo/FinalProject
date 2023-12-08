@@ -3,6 +3,7 @@ import threading
 import re
 import logging
 from colorama import Fore, Style, init
+import argparse
 
 init(autoreset=True)  # Initialize colorama
 
@@ -27,8 +28,7 @@ logging.basicConfig(
     ]
 )
 
-def save_results_to_file(targets):
-    filename = input("Enter the filename to save results (include extension, e.g., 'results.txt'): ")
+def save_results_to_file(filename,targets):
     with open(filename, 'w') as file:
         for target in targets:
             file.write(f"Results for {target}:\n")
@@ -150,9 +150,8 @@ def thread_scan(target, ports, scan_start_lock):
     for thread in threads:
         thread.join()
 
-def ip_input():
+def ip_input(ip_input_str):
     while True:
-        ip_input_str = input("Enter the target IPs or range (ex. '192.168.1.1,192.168.1.2' or '192.168.1.1-192.168.1.10'): ")
         ip_list = [ip.strip() for ip in ip_input_str.split(',')]
 
         if all(valid_ip(ip) or valid_ip_range(ip) for ip in ip_list):
@@ -164,7 +163,7 @@ def ip_input():
             print(f"You have entered valid IP addresses: {', '.join(ips)}")
             return ips
         else:
-            print("Please enter valid IP addresses or range")
+            raise argparse.ArgumentTypeError("Please enter valid IP addresses or range")
 
 def port_input():
     while True:
@@ -192,9 +191,16 @@ def thread_scan_wrapper(target, port, scan_start_lock):
     thread_scan(target, port, scan_start_lock)
 
 def main():
+    parser = argparse.ArgumentParser(description='Mega Port Scanner Made By Liam Smydo and Spencer Lightfoot')
+    parser.add_argument('-t', '--target', type=ip_input, help="Target IPs or ranges (ex. '192.168.1.1,192.168.1.2' or '192.168.1.1-192.168.1.10')", default='127.0.0.1')
+    parser.add_argument('-s', '--scan-type', help='Scan Type q = quick (Common Ports), t = thorough (All ports) c = custom)', default='q')
+    parser.add_argument('-o', '--output', help='"Enter the filename to save results (include extension, e.g., "results.txt"): "', default='results.txt')
+    args = parser.parse_args()
+    ip_input_str = args.target
+    scan_mode = args.scan_type
     global ip_results
     processed_ips = set()  # To track processed IPs
-    targets = ip_input()
+    targets = args.target
 
     for target in targets:
         if target not in processed_ips:
@@ -202,10 +208,7 @@ def main():
             ip_results[target] = {'open_ports': set(), 'closed_ports': set(), 'all_ports': set()}
 
             # Scan mode options
-            scan_mode = input(f"\nChoose a scan mode for target {target}: "
-                              "\n(Q)uick Scan (Common Ports)"
-                              "\n(T)horough Scan (Entire Port Range)"
-                              "\n(C)ustom Scan (Specify Port Range) ").lower()
+            
 
             scan_start_lock = threading.Lock()
 
@@ -271,6 +274,7 @@ def main():
                 elif port in ip_results[target]['closed_ports'] and port not in ip_results[target]['open_ports'] and port not in printed_ports:
                     display_port_status(target, port, 'closed')
                     printed_ports.add(port)
-
+    filename = args.output
+    save_results_to_file(filename,targets)
 if __name__ == '__main__':
     main()
