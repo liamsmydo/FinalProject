@@ -1,0 +1,11 @@
+Results for 127.0.0.1:
+Port 110 (POP3) is closed.
+Port 80 (HTTP) is closed.
+Port 21 (FTP) is closed.
+Port 22 (SSH) is closed.
+Port 23 (Telnet) is closed.
+Port 53 (DNS) is closed.
+Port 25 (SMTP) is closed.
+Port 443 (HTTPS) is closed.
+Port 3389 (RDP) is closed.
+
