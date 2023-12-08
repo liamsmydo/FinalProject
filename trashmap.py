@@ -191,7 +191,7 @@ def thread_scan_wrapper(target, port, scan_start_lock):
     thread_scan(target, port, scan_start_lock)
 
 def main():
-    parser = argparse.ArgumentParser(description='Mega Port Scanner Made By Liam Smydo and Spencer Lightfoot')
+    parser = argparse.ArgumentParser(description='TrashMap Scanner Made By Liam Smydo and Spencer Lightfoot')
     parser.add_argument('-t', '--target', type=ip_input, help="Target IPs or ranges (ex. '192.168.1.1,192.168.1.2' or '192.168.1.1-192.168.1.10')", default='127.0.0.1')
     parser.add_argument('-s', '--scan-type', help='Scan Type q = quick (Common Ports), t = thorough (All ports) c = custom)', default='q')
     parser.add_argument('-o', '--output', help='"Enter the filename to save results (include extension, e.g., "results.txt"): "', default='results.txt')
