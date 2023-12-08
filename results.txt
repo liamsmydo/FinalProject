@@ -1,0 +1,5 @@
+Results for 127.0.0.1:
+Port 80 (HTTP) is closed.
+Port 100 (Unknown Service) is closed.
+Port 135 (Unknown Service) is open.
+
